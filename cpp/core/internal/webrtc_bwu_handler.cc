@@ -34,6 +34,7 @@ WebrtcBwuHandler::WebrtcBwuHandler(Mediums& mediums,
       mediums_(mediums) {}
 
 void WebrtcBwuHandler::Revert() {
+  NEARBY_LOG(INFO, "GGG in WebrtcBwuHandler::Revert, active_service_ids_ size: %d.", active_service_ids_.size());
   for (const auto& service_id : active_service_ids_) {
     webrtc_.StopAcceptingConnections(service_id);
   }
@@ -48,6 +49,7 @@ void WebrtcBwuHandler::Revert() {
 void WebrtcBwuHandler::OnIncomingWebrtcConnection(
     ClientProxy* client, const std::string& upgrade_service_id,
     mediums::WebRtcSocketWrapper socket) {
+  NEARBY_LOG(INFO, "GGG in WebrtcBwuHandler::OnIncomingWebrtcConnection l1");
   std::string service_id = Utils::UnwrapUpgradeServiceId(upgrade_service_id);
   auto channel = std::make_unique<WebRtcEndpointChannel>(service_id, socket);
   auto webrtc_socket =
@@ -65,6 +67,8 @@ void WebrtcBwuHandler::OnIncomingWebrtcConnection(
 ByteArray WebrtcBwuHandler::InitializeUpgradedMediumForEndpoint(
     ClientProxy* client, const std::string& service_id,
     const std::string& endpoint_id) {
+  NEARBY_LOGS(INFO) << "GGG in WebrtcBwuHandler::InitializeUpgradedMediumForEndpoint service id: " << service_id
+                    << " , endpoint_id: " << endpoint_id;
   // Use wrapped service ID to avoid have the same ID with the one for
   // startAdvertising. Otherwise, the listening request would be ignored because
   // the medium already start accepting the connection because the client not
@@ -108,6 +112,8 @@ std::unique_ptr<EndpointChannel>
 WebrtcBwuHandler::CreateUpgradedEndpointChannel(
     ClientProxy* client, const std::string& service_id,
     const std::string& endpoint_id, const UpgradePathInfo& upgrade_path_info) {
+  NEARBY_LOGS(INFO) << "GGG in WebrtcBwuHandler::CreateUpgradedEndpointChannel service id: " << service_id
+                    << ", endpoint_id: " << endpoint_id;
   const UpgradePathInfo::WebRtcCredentials& web_rtc_credentials =
       upgrade_path_info.web_rtc_credentials();
   mediums::PeerId peer_id(web_rtc_credentials.peer_id());
@@ -124,6 +130,7 @@ WebrtcBwuHandler::CreateUpgradedEndpointChannel(
 
   mediums::WebRtcSocketWrapper socket = webrtc_.Connect(peer_id, location_hint);
   if (!socket.IsValid()) {
+    NEARBY_LOG(INFO, "GGG in WebrtcBwuHandler::CreateUpgradedEndpointChannel l2");
     NEARBY_LOG(ERROR,
                "WebRtcBwuHandler failed to connect to remote peer (%s) on "
                "endpoint %s, aborting upgrade.",
@@ -139,12 +146,14 @@ WebrtcBwuHandler::CreateUpgradedEndpointChannel(
   // Create a new WebRtcEndpointChannel.
   auto channel = std::make_unique<WebRtcEndpointChannel>(service_id, socket);
   if (channel == nullptr) {
+    NEARBY_LOG(INFO, "GGG in WebrtcBwuHandler::CreateUpgradedEndpointChannel l3");
     socket.Close();
     NEARBY_LOG(ERROR,
                "WebRtcBwuHandler failed to create new EndpointChannel for "
                "outgoing socket %p, aborting upgrade.",
                &socket.GetImpl());
   }
+  NEARBY_LOG(INFO, "GGG in WebrtcBwuHandler::CreateUpgradedEndpointChannel l4");
 
   return channel;
 }

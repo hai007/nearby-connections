@@ -28,6 +28,8 @@
 #include "proto/connections_enums.pb.h"
 #include "absl/functional/bind_front.h"
 #include "absl/strings/escaping.h"
+#include <thread>
+//#include <stringstream>
 
 namespace location {
 namespace nearby {
@@ -91,6 +93,10 @@ BasePcpHandler::StartOperationResult P2pClusterPcpHandler::StartAdvertisingImpl(
     ClientProxy* client, const std::string& service_id,
     const std::string& local_endpoint_id, const ByteArray& local_endpoint_info,
     const ConnectionOptions& options) {
+  std::stringstream ss;
+  ss << std::this_thread::get_id();
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartAdvertisingImpl, tid: " << ss.str() << ", service id: " << service_id
+                    << ", l_e_i: " << local_endpoint_id;
   std::vector<proto::connections::Medium> mediums_started_successfully;
 
   WebRtcState web_rtc_state{WebRtcState::kUnconnectable};
@@ -148,11 +154,17 @@ BasePcpHandler::StartOperationResult P2pClusterPcpHandler::StartAdvertisingImpl(
 }
 
 Status P2pClusterPcpHandler::StopAdvertisingImpl(ClientProxy* client) {
+  std::stringstream ss;
+  ss << std::this_thread::get_id();
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StopAdvertisingImpl, tid: " << ss.str() << ", l-e-i: " << client->GetLocalEndpointId();
   bluetooth_medium_.TurnOffDiscoverability();
   bluetooth_medium_.StopAcceptingConnections(client->GetAdvertisingServiceId());
 
   ble_medium_.StopAdvertising(client->GetAdvertisingServiceId());
   ble_medium_.StopAcceptingConnections(client->GetAdvertisingServiceId());
+
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StopAdvertisingImpl N-pcpH-l0a: webrtc-stop-accept-commented out";
+  //webrtc_medium_.StopAcceptingConnections();
 
   wifi_lan_medium_.StopAdvertising(client->GetAdvertisingServiceId());
   wifi_lan_medium_.StopAcceptingConnections(client->GetAdvertisingServiceId());
@@ -196,7 +208,7 @@ bool P2pClusterPcpHandler::IsRecognizedBluetoothEndpoint(
 void P2pClusterPcpHandler::BluetoothDeviceDiscoveredHandler(
     ClientProxy* client, const std::string& service_id,
     BluetoothDevice device) {
-  RunOnPcpHandlerThread([this, client, service_id, device]() {
+  RunOnPcpHandlerThread([this, client, service_id, &device]() {
     // Make sure we are still discovering before proceeding.
     if (!client->IsDiscovering()) {
       NEARBY_LOG(INFO,
@@ -207,7 +219,7 @@ void P2pClusterPcpHandler::BluetoothDeviceDiscoveredHandler(
     }
 
     // Parse the Bluetooth device name.
-    const std::string device_name_string = device.GetName();
+    const std::string& device_name_string = device.GetName();
     BluetoothDeviceName device_name(device_name_string);
 
     // Make sure the Bluetooth device name points to a valid
@@ -579,6 +591,8 @@ BasePcpHandler::StartOperationResult P2pClusterPcpHandler::StartDiscoveryImpl(
   }
 
   if (options.allowed.bluetooth) {
+    NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartDiscoveryImpl service_id: "<< service_id
+                      << " client is null: "<< bool(client==nullptr);
     proto::connections::Medium bluetooth_medium = StartBluetoothDiscovery(
         {
             .device_discovered_cb = absl::bind_front(
@@ -637,6 +651,7 @@ Status P2pClusterPcpHandler::StopDiscoveryImpl(ClientProxy* client) {
 Status P2pClusterPcpHandler::InjectEndpointImpl(
     ClientProxy* client, const std::string& service_id,
     const OutOfBandConnectionMetadata& metadata) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::InjectEndpointImpl N-pcpH-l1";
   NEARBY_LOG(INFO, "InjectEndpoint");
   // Bluetooth is the only supported out-of-band connection medium.
   if (metadata.medium != Medium::BLUETOOTH) {
@@ -657,19 +672,23 @@ Status P2pClusterPcpHandler::InjectEndpointImpl(
     return {Status::kError};
   }
 
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::InjectEndpointImpl N-pcpH-l4";
   BluetoothDeviceDiscoveredHandler(client, service_id, remote_bluetooth_device);
   return {Status::kSuccess};
 }
 
 BasePcpHandler::ConnectImplResult P2pClusterPcpHandler::ConnectImpl(
     ClientProxy* client, BasePcpHandler::DiscoveredEndpoint* endpoint) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::ConnectImpl N-pcpH-l1";
   if (!endpoint) {
+    NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::ConnectImpl N-pcpH-l2";
     return BasePcpHandler::ConnectImplResult{
         .status = {Status::kError},
     };
   }
   switch (endpoint->medium) {
     case proto::connections::Medium::BLUETOOTH: {
+      NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::ConnectImpl N-pcpH-l3";
       auto* bluetooth_endpoint = down_cast<BluetoothEndpoint*>(endpoint);
       if (bluetooth_endpoint) {
         return BluetoothConnectImpl(client, bluetooth_endpoint);
@@ -800,6 +819,7 @@ proto::connections::Medium P2pClusterPcpHandler::StartBluetoothAdvertising(
 proto::connections::Medium P2pClusterPcpHandler::StartBluetoothDiscovery(
     BluetoothDiscoveredDeviceCallback callback, ClientProxy* client,
     const std::string& service_id) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartBluetoothDiscovery N-pcpH-l1";
   if (bluetooth_radio_.Enable() &&
       bluetooth_medium_.StartDiscovery(std::move(callback))) {
     NEARBY_LOG(INFO, "P2pClusterPcpHandler::StartBluetoothDiscovery: ok");
@@ -812,19 +832,23 @@ proto::connections::Medium P2pClusterPcpHandler::StartBluetoothDiscovery(
 
 BasePcpHandler::ConnectImplResult P2pClusterPcpHandler::BluetoothConnectImpl(
     ClientProxy* client, BluetoothEndpoint* endpoint) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::BluetoothConnectImpl N-pcpH-l1";
   BluetoothDevice& device = endpoint->bluetooth_device;
 
   BluetoothSocket bluetooth_socket =
       bluetooth_medium_.Connect(device, endpoint->service_id);
   if (!bluetooth_socket.IsValid()) {
+    NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::BluetoothConnectImpl N-pcpH-l2";
     return BasePcpHandler::ConnectImplResult{
         .status = {Status::kBluetoothError},
     };
   }
 
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::BluetoothConnectImpl N-pcpH-l3";
   auto channel = absl::make_unique<BluetoothEndpointChannel>(
       endpoint->endpoint_id, bluetooth_socket);
 
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::BluetoothConnectImpl N-pcpH-l4";
   return BasePcpHandler::ConnectImplResult{
       .medium = proto::connections::Medium::BLUETOOTH,
       .status = {Status::kSuccess},
@@ -1148,6 +1172,7 @@ P2pClusterPcpHandler::StartListeningForWebRtcConnections(
     ClientProxy* client, const std::string& service_id,
     const std::string& local_endpoint_id,
     const ByteArray& local_endpoint_info) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartListeningForWebRtcConnections N-pcpH-l0, l-e-i: " << local_endpoint_id;
   if (!webrtc_medium_.IsAvailable()) {
     return proto::connections::UNKNOWN_MEDIUM;
   }
@@ -1156,6 +1181,7 @@ P2pClusterPcpHandler::StartListeningForWebRtcConnections(
     mediums::PeerId self_id = CreatePeerIdFromAdvertisement(
         service_id, local_endpoint_id, local_endpoint_info);
     std::string empty_country_code;
+    NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartListeningForWebRtcConnections N-pcpH-l1";
     if (!webrtc_medium_.StartAcceptingConnections(
             self_id, service_id, Utils::BuildLocationHint(empty_country_code),
             {[this, client,
@@ -1178,19 +1204,23 @@ P2pClusterPcpHandler::StartListeningForWebRtcConnections(
                                          proto::connections::WEB_RTC);
                   });
             }})) {
+      NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartListeningForWebRtcConnections N-pcpH-l2";
       return proto::connections::UNKNOWN_MEDIUM;
     }
   }
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::StartListeningForWebRtcConnections N-pcpH-l3";
 
   return proto::connections::WEB_RTC;
 }
 
 BasePcpHandler::ConnectImplResult P2pClusterPcpHandler::WebRtcConnectImpl(
     ClientProxy* client, WebRtcEndpoint* webrtc_endpoint) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::WebRtcConnectImpl N-pcpH-l1";
   std::string empty_country_code;
   mediums::WebRtcSocketWrapper socket_wrapper = webrtc_medium_.Connect(
       webrtc_endpoint->peer_id, Utils::BuildLocationHint(empty_country_code));
   if (!socket_wrapper.IsValid()) {
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::WebRtcConnectImpl N-pcpH-l2";
     return BasePcpHandler::ConnectImplResult{.status = {Status::kError}};
   }
 
@@ -1198,10 +1228,12 @@ BasePcpHandler::ConnectImplResult P2pClusterPcpHandler::WebRtcConnectImpl(
       webrtc_endpoint->endpoint_id, socket_wrapper);
 
   if (!channel) {
+    NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::WebRtcConnectImpl N-pcpH-l3";
     socket_wrapper.Close();
     return BasePcpHandler::ConnectImplResult{.status = {Status::kError}};
   }
 
+  NEARBY_LOGS(INFO) << "GGG in P2pClusterPcpHandler::WebRtcConnectImpl N-pcpH-l4";
   return BasePcpHandler::ConnectImplResult{
       .medium = proto::connections::Medium::WEB_RTC,
       .status = {Status::kSuccess},

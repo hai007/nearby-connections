@@ -16,6 +16,7 @@
 
 #include <functional>
 #include <memory>
+#include <thread>
 
 #include "core/internal/mediums/webrtc/session_description_wrapper.h"
 #include "core/internal/mediums/webrtc/signaling_frames.h"
@@ -72,7 +73,11 @@ bool WebRtc::StartAcceptingConnections(const PeerId& self_id,
                                        const std::string& service_id,
                                        const LocationHint& location_hint,
                                        AcceptedConnectionCallback callback) {
+  std::stringstream ss;
+  ss << std::this_thread::get_id();
+  NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w1, tid: %s", ss.str().c_str());
   if (!IsAvailable()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w2");
     {
       MutexLock lock(&mutex_);
       LogAndDisconnect("WebRTC is not available for data transfer.");
@@ -81,6 +86,7 @@ bool WebRtc::StartAcceptingConnections(const PeerId& self_id,
   }
 
   if (IsAcceptingConnections(service_id)) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w3");
     NEARBY_LOG(WARNING, "Already accepting WebRTC connections.");
     return false;
   }
@@ -88,13 +94,18 @@ bool WebRtc::StartAcceptingConnections(const PeerId& self_id,
   {
     MutexLock lock(&mutex_);
     if (role_ != Role::kNone) {
+      NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w4");
       NEARBY_LOG(WARNING,
                  "Cannot start accepting WebRTC connections, current role %d",
                  role_);
       return false;
     }
 
-    if (!InitWebRtcFlow(Role::kOfferer, self_id, location_hint)) return false;
+    if (!InitWebRtcFlow(Role::kOfferer, self_id, location_hint))
+    {
+      NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w5");
+      return false;
+    }
 
     restart_receive_messages_alarm_ = CancelableAlarm(
         "restart_receiving_messages_webrtc",
@@ -102,34 +113,44 @@ bool WebRtc::StartAcceptingConnections(const PeerId& self_id,
                   service_id),
         kRestartReceiveMessagesDuration, &restart_receive_messages_executor_);
 
+    NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w6");
     SessionDescriptionWrapper offer = connection_flow_->CreateOffer();
+    NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w7");
     pending_local_offer_ = webrtc_frames::EncodeOffer(self_id, offer.GetSdp());
     if (!SetLocalSessionDescription(std::move(offer))) {
+      NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w8");
       return false;
     }
 
+    NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w9");
     // There is no timeout set for the future returned since we do not know how
     // much time it will take for the two devices to discover each other before
     // the actual transport can begin.
     ListenForWebRtcSocketFuture(connection_flow_->GetDataChannel(),
                                 std::move(callback));
-    NEARBY_LOG(INFO, "Started listening for WebRtc connections as %s",
+    NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w10");
+    NEARBY_LOG(ERROR, "Started listening for WebRtc connections as %s",
                self_id.GetId().c_str());
   }
 
+  NEARBY_LOG(ERROR, "GGG in WebRtc::StartAcceptingConnections w11");
   return true;
 }
 
 WebRtcSocketWrapper WebRtc::Connect(const PeerId& peer_id,
                                     const LocationHint& location_hint) {
+  NEARBY_LOG(INFO, "GGG in WebRtc::Connect w1: %s", peer_id.GetId().c_str());
   if (!IsAvailable()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::Connect w2");
     Disconnect();
     return WebRtcSocketWrapper();
   }
 
+  NEARBY_LOG(ERROR, "GGG in WebRtc::Connect w3");
   {
     MutexLock lock(&mutex_);
     if (role_ != Role::kNone) {
+      NEARBY_LOG(ERROR, "GGG in WebRtc::Connect w4");
       NEARBY_LOG(
           WARNING,
           "Cannot connect with WebRtc because we are already acting as %d",
@@ -139,11 +160,12 @@ WebRtcSocketWrapper WebRtc::Connect(const PeerId& peer_id,
 
     peer_id_ = peer_id;
     if (!InitWebRtcFlow(Role::kAnswerer, PeerId::FromRandom(), location_hint)) {
+      NEARBY_LOG(INFO, "GGG in WebRtc::Connect w5");
       return WebRtcSocketWrapper();
     }
   }
 
-  NEARBY_LOG(INFO, "Attempting to make a WebRTC connection to %s.",
+  NEARBY_LOG(ERROR, "Attempting to make a WebRTC connection to %s.",
              peer_id.GetId().c_str());
 
   Future<WebRtcSocketWrapper> socket_future = ListenForWebRtcSocketFuture(
@@ -156,22 +178,32 @@ WebRtcSocketWrapper WebRtc::Connect(const PeerId& peer_id,
   // in a timeout in creating the socket.
   ExceptionOr<WebRtcSocketWrapper> result =
       socket_future.Get(kDataChannelTimeout);
-  if (result.ok()) return result.result();
+  NEARBY_LOG(ERROR, "GGG in WebRtc::Connect w6");
+  if (result.ok())
+  {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::Connect w7");
+    return result.result();
+  }
 
+  NEARBY_LOG(ERROR, "GGG in WebRtc::Connect w8, e: %d ", result.exception());
   Disconnect();
   return WebRtcSocketWrapper();
 }
 
 bool WebRtc::SetLocalSessionDescription(SessionDescriptionWrapper sdp) {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::SetLocalSessionDescription w1");
   if (!connection_flow_->SetLocalSessionDescription(std::move(sdp))) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::SetLocalSessionDescription w2");
     LogAndDisconnect("Unable to set local session description");
     return false;
   }
+  NEARBY_LOG(ERROR, "GGG in WebRtc::SetLocalSessionDescription w3");
 
   return true;
 }
 
 void WebRtc::StopAcceptingConnections(const std::string& service_id) {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::StopAcceptingConnections w1");
   if (!IsAcceptingConnections(service_id)) {
     NEARBY_LOG(INFO,
                "Skipped StopAcceptingConnections since we are not currently "
@@ -184,13 +216,14 @@ void WebRtc::StopAcceptingConnections(const std::string& service_id) {
     MutexLock lock(&mutex_);
     ShutdownSignaling();
   }
-  NEARBY_LOG(INFO, "Stopped accepting WebRTC connections");
+  NEARBY_LOG(ERROR, "Stopped accepting WebRTC connections");
 }
 
 Future<WebRtcSocketWrapper> WebRtc::ListenForWebRtcSocketFuture(
     Future<rtc::scoped_refptr<webrtc::DataChannelInterface>>
         data_channel_future,
     AcceptedConnectionCallback callback) {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::ListenForWebRtcSocketFuture w1");
   Future<WebRtcSocketWrapper> socket_future;
   auto data_channel_runnable = [this, socket_future, data_channel_future,
                                 callback{std::move(callback)}]() mutable {
@@ -207,7 +240,7 @@ Future<WebRtcSocketWrapper> WebRtc::ListenForWebRtcSocketFuture(
       }
       socket_future.Set(wrapper);
     } else {
-      NEARBY_LOG(WARNING, "Failed to get WebRtcSocket.");
+      NEARBY_LOG(WARNING, "WebRtc::InitWebRtcFlow.");
       socket_future.Set(WebRtcSocketWrapper());
     }
   };
@@ -232,10 +265,12 @@ WebRtcSocketWrapper WebRtc::CreateWebRtcSocketWrapper(
 
 bool WebRtc::InitWebRtcFlow(Role role, const PeerId& self_id,
                             const LocationHint& location_hint) {
+  NEARBY_LOG(WARNING, "GGG WebRtc::InitWebRtcFlow l1");
   role_ = role;
   self_id_ = self_id;
 
   if (connection_flow_) {
+    NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l2");
     LogAndShutdownSignaling(
         "Tried to initialize WebRTC without shutting down the previous "
         "connection");
@@ -243,15 +278,18 @@ bool WebRtc::InitWebRtcFlow(Role role, const PeerId& self_id,
   }
 
   if (signaling_messenger_) {
+    NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l3");
     LogAndShutdownSignaling(
         "Tried to initialize WebRTC without shutting down signaling messenger");
     return false;
   }
 
+  NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l4");
   signaling_messenger_ =
       medium_.GetSignalingMessenger(self_id_.GetId(), location_hint);
   auto signaling_message_callback = [this](ByteArray message) {
     OffloadFromSignalingThread([this, message{std::move(message)}]() {
+      NEARBY_LOG(WARNING, "GGG00 in WebRtc::InitWebRtcFlow l-400");
       ProcessSignalingMessage(message);
     });
   };
@@ -259,6 +297,7 @@ bool WebRtc::InitWebRtcFlow(Role role, const PeerId& self_id,
   if (!signaling_messenger_->IsValid() ||
       !signaling_messenger_->StartReceivingMessages(
           signaling_message_callback)) {
+    NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l5");
     DisconnectLocked();
     return false;
   }
@@ -267,6 +306,7 @@ bool WebRtc::InitWebRtcFlow(Role role, const PeerId& self_id,
       !signaling_messenger_->SendMessage(
           peer_id_.GetId(),
           webrtc_frames::EncodeReadyForSignalingPoke(self_id))) {
+    NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l6");
     LogAndDisconnect(absl::StrCat("Could not send signaling poke to peer ",
                                   peer_id_.GetId()));
     return false;
@@ -274,33 +314,45 @@ bool WebRtc::InitWebRtcFlow(Role role, const PeerId& self_id,
 
   connection_flow_ = ConnectionFlow::Create(GetLocalIceCandidateListener(),
                                             GetDataChannelListener(), medium_);
-  if (!connection_flow_) return false;
+  if (!connection_flow_)
+  {
+      NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l6.5");
+      return false;
+  }
 
+  NEARBY_LOG(WARNING, "GGG in WebRtc::InitWebRtcFlow l7");
   return true;
 }
 
 void WebRtc::OnLocalIceCandidate(
     const webrtc::IceCandidateInterface* local_ice_candidate) {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::OnLocalIceCandidate w1");
   ::location::nearby::mediums::IceCandidate ice_candidate =
       webrtc_frames::EncodeIceCandidate(*local_ice_candidate);
 
+  NEARBY_LOG(ERROR, "GGG in WebRtc::OnLocalIceCandidate w2");
   OffloadFromSignalingThread([this, ice_candidate{std::move(ice_candidate)}]() {
     MutexLock lock(&mutex_);
     if (IsSignaling()) {
+      NEARBY_LOG(ERROR, "GGG in WebRtc::OnLocalIceCandidate w3");
       signaling_messenger_->SendMessage(
           peer_id_.GetId(), webrtc_frames::EncodeIceCandidates(
                                 self_id_, {std::move(ice_candidate)}));
     } else {
+      NEARBY_LOG(ERROR, "GGG in WebRtc::OnLocalIceCandidate w4");
       pending_local_ice_candidates_.push_back(std::move(ice_candidate));
     }
   });
+  NEARBY_LOG(ERROR, "GGG in WebRtc::OnLocalIceCandidate w5");
 }
 
 LocalIceCandidateListener WebRtc::GetLocalIceCandidateListener() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::GetLocalIceCandidateListener w100");
   return {std::bind(&WebRtc::OnLocalIceCandidate, this, std::placeholders::_1)};
 }
 
 void WebRtc::OnDataChannelClosed() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::OnDataChannelClosed w1");
   OffloadFromSignalingThread([this]() {
     MutexLock lock(&mutex_);
     LogAndDisconnect("WebRTC data channel closed");
@@ -308,6 +360,7 @@ void WebRtc::OnDataChannelClosed() {
 }
 
 void WebRtc::OnDataChannelMessageReceived(const ByteArray& message) {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::OnDataChannelMessageReceived w1");
   OffloadFromSignalingThread([this, message]() {
     MutexLock lock(&mutex_);
     if (!socket_.IsValid()) {
@@ -346,62 +399,75 @@ bool WebRtc::IsSignaling() {
 }
 
 void WebRtc::ProcessSignalingMessage(const ByteArray& message) {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w1");
   MutexLock lock(&mutex_);
 
   if (!connection_flow_) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w2");
     LogAndDisconnect("Received WebRTC frame before signaling was started");
     return;
   }
 
   location::nearby::mediums::WebRtcSignalingFrame frame;
   if (!frame.ParseFromString(std::string(message))) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w3");
     LogAndDisconnect("Failed to parse signaling message");
     return;
   }
 
   if (!frame.has_sender_id()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w4");
     LogAndDisconnect("Invalid WebRTC frame: Sender ID is missing");
     return;
   }
 
   if (frame.has_ready_for_signaling_poke() && !peer_id_.IsValid()) {
     peer_id_ = PeerId(frame.sender_id().id());
-    NEARBY_LOG(INFO, "Peer %s is ready for signaling",
+    NEARBY_LOG(ERROR, "Peer %s is ready for signaling",
                peer_id_.GetId().c_str());
   }
 
   if (!IsSignaling()) {
-    NEARBY_LOG(INFO,
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w5");
+    NEARBY_LOG(ERROR,
                "Ignoring WebRTC frame: we are not currently listening for "
                "signaling messages");
     return;
   }
 
   if (frame.sender_id().id() != peer_id_.GetId()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w6");
     NEARBY_LOG(
         INFO, "Ignoring WebRTC frame: we are only listening for another peer.");
     return;
   }
 
   if (frame.has_ready_for_signaling_poke()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w6-1");
     SendOfferAndIceCandidatesToPeer();
   } else if (frame.has_offer()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w6-2");
     connection_flow_->OnOfferReceived(
         SessionDescriptionWrapper(webrtc_frames::DecodeOffer(frame).release()));
     SendAnswerToPeer();
   } else if (frame.has_answer()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w6-3");
     connection_flow_->OnAnswerReceived(SessionDescriptionWrapper(
         webrtc_frames::DecodeAnswer(frame).release()));
   } else if (frame.has_ice_candidates()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w6-4");
     if (!connection_flow_->OnRemoteIceCandidatesReceived(
             webrtc_frames::DecodeIceCandidates(frame))) {
       LogAndDisconnect("Could not add remote ice candidates.");
     }
   }
+  NEARBY_LOG(ERROR, "GGG in WebRtc::ProcessSignalingMessage w7");
 }
 
 void WebRtc::SendOfferAndIceCandidatesToPeer() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::SendOfferAndIceCandidatesToPeer w1");
   if (pending_local_offer_.Empty()) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::SendOfferAndIceCandidatesToPeer w2");
     LogAndDisconnect(
         "Unable to send pending offer to remote peer: local offer not set");
     return;
@@ -409,6 +475,7 @@ void WebRtc::SendOfferAndIceCandidatesToPeer() {
 
   if (!signaling_messenger_->SendMessage(peer_id_.GetId(),
                                          pending_local_offer_)) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::SendOfferAndIceCandidatesToPeer w3");
     LogAndDisconnect("Failed to send local offer via signaling messenger");
     return;
   }
@@ -420,16 +487,23 @@ void WebRtc::SendOfferAndIceCandidatesToPeer() {
         webrtc_frames::EncodeIceCandidates(
             self_id_, std::move(pending_local_ice_candidates_)));
   }
+  NEARBY_LOG(ERROR, "GGG in WebRtc::SendOfferAndIceCandidatesToPeer w4");
 }
 
 void WebRtc::SendAnswerToPeer() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::SendAnswerToPeer w1");
   SessionDescriptionWrapper answer = connection_flow_->CreateAnswer();
   ByteArray answer_message(
       webrtc_frames::EncodeAnswer(self_id_, answer.GetSdp()));
 
-  if (!SetLocalSessionDescription(std::move(answer))) return;
+  if (!SetLocalSessionDescription(std::move(answer)))
+  {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::SendAnswerToPeer w2");
+    return;
+  }
 
   if (!signaling_messenger_->SendMessage(peer_id_.GetId(), answer_message)) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::SendAnswerToPeer w3");
     LogAndDisconnect("Failed to send local answer via signaling messenger");
     return;
   }
@@ -446,6 +520,7 @@ void WebRtc::LogAndShutdownSignaling(const std::string& error_message) {
 }
 
 void WebRtc::ShutdownSignaling() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::ShutdownSignaling w1");
   role_ = Role::kNone;
   self_id_ = PeerId();
   peer_id_ = PeerId();
@@ -466,11 +541,13 @@ void WebRtc::ShutdownSignaling() {
 }
 
 void WebRtc::Disconnect() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::Disconnect w1");
   MutexLock lock(&mutex_);
   DisconnectLocked();
 }
 
 void WebRtc::DisconnectLocked() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::DisconnectLocked w1");
   ShutdownSignaling();
   ShutdownWebRtcSocket();
   ShutdownIceCandidateCollection();
@@ -484,7 +561,9 @@ void WebRtc::ShutdownWebRtcSocket() {
 }
 
 void WebRtc::ShutdownIceCandidateCollection() {
+  NEARBY_LOG(ERROR, "GGG in WebRtc::ShutdownIceCandidateCollection w1");
   if (connection_flow_) {
+    NEARBY_LOG(ERROR, "GGG in WebRtc::ShutdownIceCandidateCollection w2");
     connection_flow_->Close();
     connection_flow_.reset();
   }
@@ -497,12 +576,12 @@ void WebRtc::OffloadFromSignalingThread(Runnable runnable) {
 void WebRtc::RestartReceiveMessages(const LocationHint& location_hint,
                                     const std::string& service_id) {
   if (!IsAcceptingConnections(service_id)) {
-    NEARBY_LOG(INFO,
+    NEARBY_LOG(ERROR,
                "Skipping restart since we are not accepting connections.");
     return;
   }
 
-  NEARBY_LOG(INFO, "Restarting listening for receiving signaling messages.");
+  NEARBY_LOG(ERROR, "Restarting listening for receiving signaling messages.");
   {
     MutexLock lock(&mutex_);
     signaling_messenger_->StopReceivingMessages();

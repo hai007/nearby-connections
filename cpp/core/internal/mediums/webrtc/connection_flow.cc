@@ -86,13 +86,16 @@ using PeerConnectionState =
 std::unique_ptr<ConnectionFlow> ConnectionFlow::Create(
     LocalIceCandidateListener local_ice_candidate_listener,
     DataChannelListener data_channel_listener, WebRtcMedium& webrtc_medium) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::Create c1");
   auto connection_flow = absl::WrapUnique(
       new ConnectionFlow(std::move(local_ice_candidate_listener),
                          std::move(data_channel_listener)));
   if (connection_flow->InitPeerConnection(webrtc_medium)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::Create c2");
     return connection_flow;
   }
 
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::Create c3");
   return nullptr;
 }
 
@@ -106,9 +109,11 @@ ConnectionFlow::ConnectionFlow(
 ConnectionFlow::~ConnectionFlow() { Close(); }
 
 SessionDescriptionWrapper ConnectionFlow::CreateOffer() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateOffer c1");
   MutexLock lock(&mutex_);
 
   if (!TransitionState(State::kInitialized, State::kCreatingOffer)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateOffer c2");
     return SessionDescriptionWrapper();
   }
 
@@ -128,16 +133,20 @@ SessionDescriptionWrapper ConnectionFlow::CreateOffer() {
   ExceptionOr<SessionDescriptionWrapper> result = success_future->Get(kTimeout);
   if (result.ok() &&
       TransitionState(State::kCreatingOffer, State::kWaitingForAnswer)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateOffer c3");
     return std::move(result.result());
   }
 
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateOffer c4");
   return SessionDescriptionWrapper();
 }
 
 SessionDescriptionWrapper ConnectionFlow::CreateAnswer() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateAnswer c1");
   MutexLock lock(&mutex_);
 
   if (!TransitionState(State::kReceivedOffer, State::kCreatingAnswer)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateAnswer c2");
     return SessionDescriptionWrapper();
   }
 
@@ -151,13 +160,16 @@ SessionDescriptionWrapper ConnectionFlow::CreateAnswer() {
   ExceptionOr<SessionDescriptionWrapper> result = success_future->Get(kTimeout);
   if (result.ok() &&
       TransitionState(State::kCreatingAnswer, State::kWaitingToConnect)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateAnswer c3");
     return std::move(result.result());
   }
 
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateAnswer c4");
   return SessionDescriptionWrapper();
 }
 
 bool ConnectionFlow::SetLocalSessionDescription(SessionDescriptionWrapper sdp) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::SetLocalSessionDescription c1");
   MutexLock lock(&mutex_);
 
   if (!sdp.IsValid()) return false;
@@ -167,15 +179,22 @@ bool ConnectionFlow::SetLocalSessionDescription(SessionDescriptionWrapper sdp) {
       new rtc::RefCountedObject<SetSessionDescriptionObserverImpl>(
           success_future);
 
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::SetLocalSessionDescription c2");
   peer_connection_->SetLocalDescription(observer, sdp.Release());
 
   ExceptionOr<bool> result = success_future->Get(kTimeout);
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::SetLocalSessionDescription c3");
   return result.ok() && result.result();
 }
 
 bool ConnectionFlow::SetRemoteSessionDescription(
     SessionDescriptionWrapper sdp) {
-  if (!sdp.IsValid()) return false;
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::SetRemoteSessionDescription c1");
+  if (!sdp.IsValid())
+  {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::SetRemoteSessionDescription c2");
+    return false;
+  }
 
   auto success_future = new Future<bool>();
   rtc::scoped_refptr<SetSessionDescriptionObserverImpl> observer =
@@ -185,39 +204,49 @@ bool ConnectionFlow::SetRemoteSessionDescription(
   peer_connection_->SetRemoteDescription(observer, sdp.Release());
 
   ExceptionOr<bool> result = success_future->Get(kTimeout);
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::SetRemoteSessionDescription c3");
   return result.ok() && result.result();
 }
 
 bool ConnectionFlow::OnOfferReceived(SessionDescriptionWrapper offer) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnOfferReceived c1");
   MutexLock lock(&mutex_);
 
   if (!TransitionState(State::kInitialized, State::kReceivedOffer)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnOfferReceived c2");
     return false;
   }
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnOfferReceived c3");
   return SetRemoteSessionDescription(std::move(offer));
 }
 
 bool ConnectionFlow::OnAnswerReceived(SessionDescriptionWrapper answer) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnAnswerReceived c1");
   MutexLock lock(&mutex_);
 
   if (!TransitionState(State::kWaitingForAnswer, State::kWaitingToConnect)) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnAnswerReceived c2");
     return false;
   }
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnAnswerReceived c3");
   return SetRemoteSessionDescription(std::move(answer));
 }
 
 bool ConnectionFlow::OnRemoteIceCandidatesReceived(
     std::vector<std::unique_ptr<webrtc::IceCandidateInterface>>
         ice_candidates) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnRemoteIceCandidatesReceived c1");
   MutexLock lock(&mutex_);
 
   if (state_ == State::kEnded) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnRemoteIceCandidatesReceived c2");
     NEARBY_LOG(WARNING,
                "You cannot add ice candidates to a disconnected session.");
     return false;
   }
 
   if (state_ != State::kWaitingToConnect && state_ != State::kConnected) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnRemoteIceCandidatesReceived c3");
     cached_remote_ice_candidates_.insert(
         cached_remote_ice_candidates_.end(),
         std::make_move_iterator(ice_candidates.begin()),
@@ -226,10 +255,12 @@ bool ConnectionFlow::OnRemoteIceCandidatesReceived(
   }
 
   for (auto&& ice_candidate : ice_candidates) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnRemoteIceCandidatesReceived c4");
     if (!peer_connection_->AddIceCandidate(ice_candidate.get())) {
       NEARBY_LOG(WARNING, "Unable to add remote ice candidate.");
     }
   }
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnRemoteIceCandidatesReceived c5");
   return true;
 }
 
@@ -239,11 +270,13 @@ ConnectionFlow::GetDataChannel() {
 }
 
 bool ConnectionFlow::Close() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::Close c1");
   MutexLock lock(&mutex_);
   return CloseLocked();
 }
 
 bool ConnectionFlow::InitPeerConnection(WebRtcMedium& webrtc_medium) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::InitPeerConnection c1");
   Future<bool> success_future;
   // CreatePeerConnection callback may be invoked after ConnectionFlow lifetime
   // has ended, in case of a timeout. Future is captured by value, and is safe
@@ -254,6 +287,7 @@ bool ConnectionFlow::InitPeerConnection(WebRtcMedium& webrtc_medium) {
       [this, success_future](rtc::scoped_refptr<webrtc::PeerConnectionInterface>
                                  peer_connection) mutable {
         if (!peer_connection) {
+          NEARBY_LOG(INFO, "GGG in ConnectionFlow::InitPeerConnection c2");
           success_future.Set(false);
           return;
         }
@@ -262,16 +296,23 @@ bool ConnectionFlow::InitPeerConnection(WebRtcMedium& webrtc_medium) {
         // success_future; it is either:
         // 1) this is the 2nd call of this callback (and this is a bug), or
         // 2) Get(timeout) has set the future value as exception already.
-        if (success_future.IsSet()) return;
+        if (success_future.IsSet()) 
+        {
+          NEARBY_LOG(INFO, "GGG in ConnectionFlow::InitPeerConnection c3");
+          return;
+        }
         peer_connection_ = peer_connection;
         success_future.Set(true);
       });
 
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::InitPeerConnection c300");
   ExceptionOr<bool> result = success_future.Get(kTimeout);
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::InitPeerConnection c4");
   return result.ok() && result.result();
 }
 
 void ConnectionFlow::OnSignalingStable() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OnSignalingStable c1");
   MutexLock lock(&mutex_);
 
   if (state_ != State::kWaitingToConnect && state_ != State::kConnected) return;
@@ -286,6 +327,7 @@ void ConnectionFlow::OnSignalingStable() {
 
 void ConnectionFlow::ProcessOnPeerConnectionChange(
     webrtc::PeerConnectionInterface::PeerConnectionState new_state) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::ProcessOnPeerConnectionChange c1");
   if (new_state == PeerConnectionState::kClosed ||
       new_state == PeerConnectionState::kFailed ||
       new_state == PeerConnectionState::kDisconnected) {
@@ -295,6 +337,7 @@ void ConnectionFlow::ProcessOnPeerConnectionChange(
 }
 
 void ConnectionFlow::ProcessDataChannelConnected() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::ProcessDataChannelConnected c1");
   MutexLock lock(&mutex_);
   NEARBY_LOG(INFO, "Data channel state changed to connected.");
   if (!TransitionState(State::kWaitingToConnect, State::kConnected))
@@ -303,6 +346,7 @@ void ConnectionFlow::ProcessDataChannelConnected() {
 
 webrtc::DataChannelObserver* ConnectionFlow::CreateDataChannelObserver(
     rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CreateDataChannelObserver c1");
   if (!data_channel_observer_) {
     auto state_change_callback = [this,
                                   data_channel{std::move(data_channel)}]() {
@@ -328,25 +372,31 @@ webrtc::DataChannelObserver* ConnectionFlow::CreateDataChannelObserver(
 }
 
 bool ConnectionFlow::TransitionState(State current_state, State new_state) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::TransitionState c1");
   if (current_state != state_) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::TransitionState c2");
     NEARBY_LOG(
         WARNING,
         "Invalid state transition to %d: current state is %d but expected %d.",
         new_state, state_, current_state);
     return false;
   }
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::TransitionState c3");
   state_ = new_state;
   return true;
 }
 
 void ConnectionFlow::CloseAndNotifyLocked() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CloseAndNotifyLocked c1");
   if (CloseLocked()) {
     data_channel_listener_.data_channel_closed_cb();
   }
 }
 
 bool ConnectionFlow::CloseLocked() {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CloseLocked c1");
   if (state_ == State::kEnded) {
+    NEARBY_LOG(INFO, "GGG in ConnectionFlow::CloseLocked c2");
     return false;
   }
   state_ = State::kEnded;
@@ -356,10 +406,12 @@ bool ConnectionFlow::CloseLocked() {
 
   data_channel_observer_.reset();
   NEARBY_LOG(INFO, "Closed WebRTC connection.");
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::CloseLocked c3");
   return true;
 }
 
 void ConnectionFlow::OffloadFromSignalingThread(Runnable runnable) {
+  NEARBY_LOG(INFO, "GGG in ConnectionFlow::OffloadFromSignalingThread c1");
   single_threaded_signaling_offloader_.Execute(std::move(runnable));
 }
 

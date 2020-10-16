@@ -82,10 +82,13 @@ Status BasePcpHandler::StartAdvertising(ClientProxy* client,
   ConnectionOptions advertising_options = options.CompatibleOptions();
   RunOnPcpHandlerThread([this, client, &service_id, &info, &advertising_options,
                          &response]() {
+    NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::StartAdvertising N-base-l1";
     auto result =
         StartAdvertisingImpl(client, service_id, client->GetLocalEndpointId(),
                              info.endpoint_info, advertising_options);
+    NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::StartAdvertising N-base-l2";
     if (!result.status.Ok()) {
+      NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::StartAdvertising N-base-l3";
       response.Set(result.status);
       return;
     }
@@ -353,6 +356,15 @@ Status BasePcpHandler::RequestConnection(ClientProxy* client,
     std::unique_ptr<EndpointChannel> channel;
     ConnectImplResult connect_impl_result;
 
+    NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::RequestConnection N-base-l1";
+    for (auto connect_endpoint : discovered_endpoints) {
+      NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::RequestConnection N-base-l2, endpoint:\n"
+                        << "eid: " << connect_endpoint->endpoint_id
+                        << "e_info: " << connect_endpoint->endpoint_info.data()
+                        << "service id: " << connect_endpoint->service_id
+                        << "medium: " << int(connect_endpoint->medium)
+                        << "w_state: " << int(connect_endpoint->web_rtc_state);
+    }
     for (auto connect_endpoint : discovered_endpoints) {
       connect_impl_result = ConnectImpl(client, connect_endpoint);
       if (connect_impl_result.status.Ok()) {
@@ -444,11 +456,27 @@ BasePcpHandler::GetDiscoveredEndpoints(const std::string& endpoint_id) {
   for (auto item = it.first; item != it.second; item++) {
     result.push_back(item->second.get());
   }
+  NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::GetDiscoveredEndpoints N-base-l1, before:\n";
+  PrintEndpoints(result);
   std::sort(result.begin(), result.end(),
             [this](DiscoveredEndpoint* a, DiscoveredEndpoint* b) -> bool {
               return IsPreferred(*a, *b);
             });
+  NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::GetDiscoveredEndpoints N-base-l2, after:\n";
+  PrintEndpoints(result);
   return result;
+}
+
+void BasePcpHandler::PrintEndpoints(std::vector<BasePcpHandler::DiscoveredEndpoint*> endpoints)
+{
+    for (auto connect_endpoint : endpoints) {
+      NEARBY_LOGS(INFO) << "GGG in BasePcpHandler::PrintEndpoints N-base-l1, endpoint:\n"
+                        << "eid: " << connect_endpoint->endpoint_id
+                        << ", e_info: " << connect_endpoint->endpoint_info.data()
+                        << ", service id: " << connect_endpoint->service_id
+                        << ", medium: " << int(connect_endpoint->medium)
+                        << ", w_state: " << int(connect_endpoint->web_rtc_state);
+    }
 }
 
 void BasePcpHandler::PendingConnectionInfo::SetCryptoContext(

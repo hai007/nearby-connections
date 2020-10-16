@@ -41,6 +41,7 @@ void EndpointChannelManager::RegisterChannelForEndpoint(
     ClientProxy* client, const std::string& endpoint_id,
     std::unique_ptr<EndpointChannel> channel) {
   MutexLock lock(&mutex_);
+  NEARBY_LOG(INFO, "GGG in EndpointChannelManager::RegisterChannelForEndpoint n1 id=%s, type=%s, name=%s", endpoint_id.c_str(), channel->GetType().c_str(), channel->GetName().c_str());
 
   SetActiveEndpointChannel(client, endpoint_id, std::move(channel));
 
@@ -51,6 +52,7 @@ void EndpointChannelManager::ReplaceChannelForEndpoint(
     ClientProxy* client, const std::string& endpoint_id,
     std::unique_ptr<EndpointChannel> channel) {
   MutexLock lock(&mutex_);
+  NEARBY_LOG(INFO, "GGG in EndpointChannelManager::ReplaceChannelForEndpoint n1 id=%s, type=%s, name=%s", endpoint_id.c_str(), channel->GetType().c_str(), channel->GetName().c_str());
 
   auto* endpoint = channel_state_.LookupEndpointData(endpoint_id);
   if (endpoint != nullptr && endpoint->channel == nullptr) {

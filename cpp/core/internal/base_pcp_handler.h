@@ -307,6 +307,8 @@ class BasePcpHandler : public PcpHandler,
   std::vector<BasePcpHandler::DiscoveredEndpoint*> GetDiscoveredEndpoints(
       const std::string& endpoint_id);
 
+  void PrintEndpoints(std::vector<BasePcpHandler::DiscoveredEndpoint*> endpoints);
+
   mediums::PeerId CreatePeerIdFromAdvertisement(const string& service_id,
                                                 const string& endpoint_id,
                                                 const ByteArray& endpoint_info);

@@ -88,6 +88,7 @@ void BwuManager::InitBwuHandlers() {
 }
 
 void BwuManager::Shutdown() {
+  NEARBY_LOG(INFO, "GGG in BwuManager::Shutdown b1.");
   NEARBY_LOG(INFO, "Initiating shutdown of BwuManager.");
 
   endpoint_manager_->UnregisterFrameProcessor(
@@ -204,8 +205,11 @@ void BwuManager::OnIncomingFrame(OfflineFrame& frame,
 void BwuManager::OnEndpointDisconnect(ClientProxy* client,
                                       const std::string& endpoint_id,
                                       CountDownLatch barrier) {
+  NEARBY_LOG(INFO, "GGG in BwuManager::OnEndpointDisconnect b1.");
   RunOnBwuManagerThread([this, client, endpoint_id, barrier]() mutable {
+    NEARBY_LOG(INFO, "GGG in BwuManager::OnEndpointDisconnect b2.");
     if (medium_ == Medium::UNKNOWN_MEDIUM) {
+      NEARBY_LOG(INFO, "GGG in BwuManager::OnEndpointDisconnect b3.");
       barrier.CountDown();
       return;
     }
@@ -236,6 +240,7 @@ void BwuManager::OnEndpointDisconnect(ClientProxy* client,
     }
     barrier.CountDown();
   });
+  NEARBY_LOG(INFO, "GGG in BwuManager::OnEndpointDisconnect b4.");
 }
 
 BwuHandler* BwuManager::SetCurrentBwuHandler(Medium medium) {
@@ -251,7 +256,9 @@ BwuHandler* BwuManager::SetCurrentBwuHandler(Medium medium) {
 }
 
 void BwuManager::Revert() {
+  NEARBY_LOG(INFO, "GGG in BwuManager::Revert b1.");
   if (handler_) {
+    NEARBY_LOG(INFO, "GGG in BwuManager::Revert b2.");
     handler_->Revert();
     medium_ = Medium::UNKNOWN_MEDIUM;
     handler_ = nullptr;
@@ -438,12 +445,14 @@ BwuManager::ProcessBwuPathAvailableEventInternal(
 void BwuManager::RunUpgradeFailedProtocol(
     ClientProxy* client, const std::string& endpoint_id,
     const UpgradePathInfo& upgrade_path_info) {
+  NEARBY_LOG(INFO, "GGG in BwuManager::RunUpgradeFailedProtocol b1.");
   // We attempted to connect to the new medium that the remote device has set up
   // for us but we failed. We need to let the remote device know so that they
   // can pick another medium for us to try.
   std::shared_ptr<EndpointChannel> channel =
       channel_manager_->GetChannelForEndpoint(endpoint_id);
   if (!channel) {
+    NEARBY_LOG(INFO, "GGG in BwuManager::RunUpgradeFailedProtocol b2.");
     NEARBY_LOG(ERROR,
                "Couldn't find a previous EndpointChannel for %s "
                "when sending an upgrade failure frame, short-circuiting the "
@@ -454,6 +463,7 @@ void BwuManager::RunUpgradeFailedProtocol(
 
   // Report UPGRADE_FAILURE to the remote device.
   if (!channel->Write(parser::ForBwuFailure(upgrade_path_info)).Ok()) {
+    NEARBY_LOG(INFO, "GGG in BwuManager::RunUpgradeFailedProtocol b3.");
     channel->Close(DisconnectionReason::IO_ERROR);
 
     NEARBY_LOG(
@@ -469,6 +479,7 @@ void BwuManager::RunUpgradeFailedProtocol(
   if (medium_ != Medium::UNKNOWN_MEDIUM) {
     Revert();
   }
+  NEARBY_LOG(INFO, "GGG in BwuManager::RunUpgradeFailedProtocol b4.");
 }
 
 bool BwuManager::ReadClientIntroductionFrame(EndpointChannel* channel,
@@ -596,6 +607,7 @@ void BwuManager::ProcessSafeToClosePriorChannelEvent(
 void BwuManager::ProcessUpgradeFailureEvent(
     ClientProxy* client, const std::string& endpoint_id,
     const UpgradePathInfo& upgrade_info) {
+  NEARBY_LOG(INFO, "GGG in BwuManager::ProcessUpgradeFailureEvent b1.");
   // The remote device failed to upgrade to the new medium we set up for them.
   // That's alright! We'll just try the next available medium (if there is
   // one).
@@ -607,6 +619,7 @@ void BwuManager::ProcessUpgradeFailureEvent(
   // have one connected endpoint. Otherwise, we'll end up disrupting our other
   // connected peers.
   if (channel_manager_->GetConnectedEndpointsCount() > 1) {
+    NEARBY_LOG(INFO, "GGG in BwuManager::ProcessUpgradeFailureEvent b2.");
     // We can't change the currentBwuMedium, so there are no more
     // upgrade attempts for this endpoint. Sorry.
     NEARBY_LOG(
@@ -638,6 +651,7 @@ void BwuManager::ProcessUpgradeFailureEvent(
   }
 
   RetryUpgradeMediums(client, endpoint_id, untried_mediums);
+  NEARBY_LOG(INFO, "GGG in BwuManager::ProcessUpgradeFailureEvent b3.");
 }
 
 void BwuManager::RetryUpgradeMediums(ClientProxy* client,
