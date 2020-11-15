@@ -207,7 +207,7 @@ bool P2pClusterPcpHandler::IsRecognizedBluetoothEndpoint(
 
 void P2pClusterPcpHandler::BluetoothDeviceDiscoveredHandler(
     ClientProxy* client, const std::string& service_id,
-    BluetoothDevice device) {
+    BluetoothDevice& device) {
   RunOnPcpHandlerThread([this, client, service_id, &device]() {
     // Make sure we are still discovering before proceeding.
     if (!client->IsDiscovering()) {
