@@ -52,6 +52,7 @@ cc_library(
         "//location/nearby/mediums/proto:web_rtc_signaling_frames_cc_proto",
         "//absl/container:flat_hash_map",
         "//absl/container:flat_hash_set",
+        "//absl/functional:bind_front",
         "//absl/numeric:int128",
         "//absl/strings",
         "//absl/time",
@@ -68,7 +69,6 @@ cc_library(
     visibility = [
         "//core/internal:__pkg__",
         "//core/internal/mediums:__pkg__",
-        "//core/internal/mediums/ble_v2:__pkg__",
         "//core/internal/mediums/webrtc:__pkg__",
     ],
     deps = [
