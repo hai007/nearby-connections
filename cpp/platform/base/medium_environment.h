@@ -41,6 +41,8 @@ class MediumEnvironment {
       api::BleMedium::AcceptedConnectionCallback;
   using OnSignalingMessageCallback =
       api::WebRtcSignalingMessenger::OnSignalingMessageCallback;
+  using OnSignalingCompleteCallback =
+      api::WebRtcSignalingMessenger::OnSignalingCompleteCallback;
   using WifiLanDiscoveredServiceCallback =
       api::WifiLanMedium::DiscoveredServiceCallback;
   using WifiLanAcceptedConnectionCallback =
@@ -114,9 +116,11 @@ class MediumEnvironment {
 
   const EnvironmentConfig& GetEnvironmentConfig();
 
-  // Registers |callback| to receive messages sent to device with id |self_id|.
-  void RegisterWebRtcSignalingMessenger(absl::string_view self_id,
-                                        OnSignalingMessageCallback callback);
+  // Registers |message_callback| to receive messages sent to device with id
+  // |self_id|, and |complete_callback| to notify when signaling is complete.
+  void RegisterWebRtcSignalingMessenger(
+      absl::string_view self_id, OnSignalingMessageCallback message_callback,
+      OnSignalingCompleteCallback complete_callback);
 
   // Unregisters the callback listening to incoming messages for |self_id|.
   void UnregisterWebRtcSignalingMessenger(absl::string_view self_id);
@@ -125,6 +129,9 @@ class MediumEnvironment {
   // |peer_id|.
   void SendWebRtcSignalingMessage(absl::string_view peer_id,
                                   const ByteArray& message);
+
+  // Simulates sending an "signaling complete" signal to the WebRTC medium.
+  void SendWebRtcSignalingComplete(absl::string_view peer_id, bool success);
 
   // Used to set if WebRtcMedium should use a valid peer connection or nullptr
   // in tests.
@@ -288,7 +295,11 @@ class MediumEnvironment {
 
   // Maps peer id to callback for receiving signaling messages.
   absl::flat_hash_map<std::string, OnSignalingMessageCallback>
-      webrtc_signaling_callback_;
+      webrtc_signaling_message_callback_;
+
+  // Maps peer id to callback for signaling complete events.
+  absl::flat_hash_map<std::string, OnSignalingCompleteCallback>
+      webrtc_signaling_complete_callback_;
 
   absl::flat_hash_map<api::WifiLanMedium*, WifiLanMediumContext>
       wifi_lan_mediums_;

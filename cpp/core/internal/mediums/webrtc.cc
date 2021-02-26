@@ -13,6 +13,7 @@
 #include "platform/public/logging.h"
 #include "platform/public/mutex_lock.h"
 #include "location/nearby/mediums/proto/web_rtc_signaling_frames.pb.h"
+#include "absl/functional/bind_front.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
 #include "webrtc/api/jsep.h"
@@ -108,14 +109,9 @@ bool WebRtc::StartAcceptingConnections(const std::string& service_id,
 
   // This registers ourselves w/ Tachyon, creating a room from the PeerId.
   // This allows a remote device to message us over Tachyon.
-  auto signaling_message_callback = [this, service_id](ByteArray message) {
-    OffloadFromThread([this, service_id{std::move(service_id)},
-                       message{std::move(message)}]() {
-      ProcessTachyonInboxMessage(service_id, message);
-    });
-  };
   if (!info.signaling_messenger->StartReceivingMessages(
-          signaling_message_callback)) {
+          absl::bind_front(&WebRtc::OnSignalingMessage, this, service_id),
+          absl::bind_front(&WebRtc::OnSignalingComplete, this, service_id))) {
     info.signaling_messenger.reset();
     return false;
   }
@@ -256,14 +252,16 @@ WebRtcSocketWrapper WebRtc::AttemptToConnect(
 
     // This registers ourselves w/ Tachyon, creating a room from the PeerId.
     // This allows a remote device to message us over Tachyon.
-    auto signaling_message_callback = [this, service_id](ByteArray message) {
-      OffloadFromThread([this, service_id{std::move(service_id)},
-                         message{std::move(message)}]() {
-        ProcessTachyonInboxMessage(service_id, message);
-      });
+    auto signaling_complete_callback = [this, &socket_future](bool success) {
+      if (!success) {
+        OffloadFromThread([&socket_future]() {
+          socket_future.SetException({Exception::kFailed});
+        });
+      }
     };
     if (!info.signaling_messenger->StartReceivingMessages(
-            signaling_message_callback)) {
+            absl::bind_front(&WebRtc::OnSignalingMessage, this, service_id),
+            signaling_complete_callback)) {
       NEARBY_LOG(INFO,
                  "Cannot connect to WebRTC peer %s because we failed to start "
                  "receiving messages over Tachyon.",
@@ -378,6 +376,37 @@ void WebRtc::ProcessLocalIceCandidate(
              service_id.c_str());
 }
 
+void WebRtc::OnSignalingMessage(const std::string& service_id,
+                                const ByteArray& message) {
+  OffloadFromThread([this, service_id, message]() {
+    ProcessTachyonInboxMessage(service_id, message);
+  });
+}
+
+void WebRtc::OnSignalingComplete(const std::string& service_id, bool success) {
+  NEARBY_LOG(INFO, "Signaling completed with status: %d.", success);
+  if (success) {
+    return;
+  }
+
+  OffloadFromThread([this, service_id]() {
+    MutexLock lock(&mutex_);
+    const auto& info_entry = accepting_connections_info_.find(service_id);
+    if (info_entry == accepting_connections_info_.end()) {
+      return;
+    }
+
+    if (info_entry->second.restart_accept_connections_count <
+        kRestartAcceptConnectionsLimit) {
+      ++info_entry->second.restart_accept_connections_count;
+    } else {
+      return;
+    }
+
+    RestartTachyonReceiveMessages(service_id);
+  });
+}
+
 void WebRtc::ProcessTachyonInboxMessage(const std::string& service_id,
                                         const ByteArray& message) {
   MutexLock lock(&mutex_);
@@ -444,6 +473,13 @@ void WebRtc::SendOffer(const std::string& service_id,
   }
 
   SessionDescriptionWrapper offer = connection_flow->CreateOffer();
+  if (!offer.IsValid()) {
+    NEARBY_LOG(INFO,
+               "Unable to send offer. Failed to create our offer locally.");
+    RemoveConnectionFlow(remote_peer_id);
+    return;
+  }
+
   const webrtc::SessionDescriptionInterface& sdp = offer.GetSdp();
   if (!connection_flow->SetLocalSessionDescription(std::move(offer))) {
     NEARBY_LOG(INFO,
@@ -496,6 +532,13 @@ void WebRtc::SendAnswer(const PeerId& remote_peer_id) {
   }
 
   SessionDescriptionWrapper answer = entry->second->CreateAnswer();
+  if (!answer.IsValid()) {
+    NEARBY_LOG(INFO,
+               "Unable to send answer. Failed to create our answer locally.");
+    RemoveConnectionFlow(remote_peer_id);
+    return;
+  }
+
   const webrtc::SessionDescriptionInterface& sdp = answer.GetSdp();
   if (!entry->second->SetLocalSessionDescription(std::move(answer))) {
     NEARBY_LOG(INFO,
@@ -565,6 +608,10 @@ void WebRtc::ReceiveIceCandidates(
 void WebRtc::ProcessRestartTachyonReceiveMessages(
     const std::string& service_id) {
   MutexLock lock(&mutex_);
+  RestartTachyonReceiveMessages(service_id);
+}
+
+void WebRtc::RestartTachyonReceiveMessages(const std::string& service_id) {
   if (!IsAcceptingConnectionsLocked(service_id)) {
     NEARBY_LOG(INFO,
                "Skipping restart listening for tachyon inbox messages since we "
@@ -580,14 +627,9 @@ void WebRtc::ProcessRestartTachyonReceiveMessages(
   info.signaling_messenger->StopReceivingMessages();
 
   // Attempt to re-register.
-  auto signaling_message_callback = [this, service_id](ByteArray message) {
-    OffloadFromThread([this, service_id{std::move(service_id)},
-                       message{std::move(message)}]() {
-      ProcessTachyonInboxMessage(service_id, message);
-    });
-  };
   if (!info.signaling_messenger->StartReceivingMessages(
-          signaling_message_callback)) {
+          absl::bind_front(&WebRtc::OnSignalingMessage, this, service_id),
+          absl::bind_front(&WebRtc::OnSignalingComplete, this, service_id))) {
     NEARBY_LOG(WARNING,
                "Failed to restart listening for tachyon inbox messages for "
                "service %s since we failed to reach Tachyon.",

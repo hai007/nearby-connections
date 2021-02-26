@@ -82,7 +82,6 @@ cc_library(
         "logging.h",
     ],
     visibility = [
-        "//googlemac/iPhone/Shared/Nearby/Connections:__subpackages__",
         "//core:__subpackages__",
         "//platform:__subpackages__",
     ],
